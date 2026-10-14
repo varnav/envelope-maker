@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Envelope Print Generator</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Tailwind Config for Font -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Base styles */
+        body {
+            background-color: #f3f4f6; /* gray-100 */
+        }
+
+        /* The physical envelope container (used for screen preview scaling) */
+        #envelope-physical {
+            background-color: white;
+            position: relative;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            /* Transform origin for responsive scaling */
+            transform-origin: top left;
+        }
+
+        /* Screen-only styles for the wrapper to handle scaling */
+        @media screen {
+            #preview-wrapper {
+                width: 100%;
+                overflow: hidden;
+                /* Max height to prevent taking up too much vertical space on large screens */
+                max-height: 80vh; 
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 1rem;
+            }
+            
+            /* Add subtle paper texture/border for web view */
+            #envelope-physical {
+                border: 1px solid #e5e7eb;
+                border-radius: 4px;
+            }
+        }
+
+        /* Print styles */
+        @media print {
+            /* Hide absolutely everything else */
+            body * {
+                visibility: hidden;
+            }
+            
+            body, html {
+                margin: 0 !important;
+                padding: 0 !important;
+                background-color: white !important;
+            }
+
+            /* Make the envelope visible and position it exactly at the top left of the printed page */
+            #envelope-physical, #envelope-physical * {
+                visibility: visible;
+            }
+
+            #envelope-physical {
+                position: absolute;
+                left: 0;
+                top: 0;
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                transform: scale(1) !important; /* Reset any JS scaling */
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            /* Force black text for crisp printing */
+            .text-gray-800 { color: #000 !important; }
+            .text-gray-600 { color: #333 !important; }
+        }
+    </style>
+</head>
+<body class="text-gray-800 antialiased h-screen flex flex-col md:flex-row overflow-hidden">
+
+    <!-- Sidebar / Controls (Hidden on Print) -->
+    <aside class="w-full md:w-[400px] bg-white h-full shadow-xl z-10 flex flex-col overflow-y-auto print:hidden">
+        <div class="p-6 border-b border-gray-200 bg-blue-600 text-white">
+            <h1 class="text-2xl font-bold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+                Envelope Maker
+            </h1>
+            <p class="text-blue-100 text-sm mt-1">Design and print custom envelopes easily.</p>
+        </div>
+
+        <div class="p-6 flex-1 flex flex-col gap-6">
+            <!-- Size Selection -->
+            <div>
+                <label for="env-size" class="block text-sm font-semibold text-gray-700 mb-1">Envelope Size</label>
+                <select id="env-size" class="w-full border border-gray-300 rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all bg-gray-50">
+                    <optgroup label="US Standard">
+                        <option value="us-10" data-width="9.5in" data-height="4.125in">US #10 (9.5" × 4.125")</option>
+                        <option value="us-9" data-width="8.875in" data-height="3.875in">US #9 (8.875" × 3.875")</option>
+                        <option value="us-a2" data-width="5.75in" data-height="4.375in">US A2 (5.75" × 4.375")</option>
+                        <option value="us-a6" data-width="6.5in" data-height="4.75in">US A6 (6.5" × 4.75")</option>
+                        <option value="us-a7" data-width="7.25in" data-height="5.25in">US A7 (7.25" × 5.25")</option>
+                    </optgroup>
+                    <optgroup label="International">
+                        <option value="dl" data-width="220mm" data-height="110mm">DL (220mm × 110mm)</option>
+                        <option value="c5" data-width="229mm" data-height="162mm">C5 (229mm × 162mm)</option>
+                        <option value="c6" data-width="162mm" data-height="114mm">C6 (162mm × 114mm)</option>
+                    </optgroup>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Make sure to select the matching paper size in your printer dialog.</p>
+            </div>
+
+            <!-- Return Address -->
+            <div>
+                <label for="from-address" class="block text-sm font-semibold text-gray-700 mb-1">Return Address (Top Left)</label>
+                <textarea id="from-address" rows="3" placeholder="Jane Doe&#10;123 Sender St.&#10;Apt 4B&#10;City, ST 12345" class="w-full border border-gray-300 rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none bg-gray-50"></textarea>
+            </div>
+
+            <!-- Recipient Address -->
+            <div>
+                <label for="to-address" class="block text-sm font-semibold text-gray-700 mb-1">Recipient Address (Center)</label>
+                <textarea id="to-address" rows="4" placeholder="John Smith&#10;456 Recipient Ave.&#10;Suite 100&#10;City, ST 67890" class="w-full border border-gray-300 rounded-md p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all resize-none bg-gray-50"></textarea>
+            </div>
+        </div>
+
+        <div class="p-6 border-t border-gray-200 bg-gray-50">
+            <button id="btn-print" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-md shadow-md transition-colors flex justify-center items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Print Envelope
+            </button>
+        </div>
+    </aside>
+
+    <!-- Preview Area (Background on Web, Hidden on Print) -->
+    <main class="flex-1 bg-gray-200 h-full overflow-auto relative print:bg-white print:overflow-visible flex items-center justify-center p-4 md:p-8">
+        
+        <!-- Wrapper to handle visual scaling for screen viewing without affecting absolute print dimensions -->
+        <div id="preview-wrapper">
+            
+            <!-- The actual Envelope container - sized dynamically via JS -->
+            <div id="envelope-physical">
+                
+                <!-- Envelope Padding/Content Wrapper -->
+                <div class="absolute inset-0" style="padding: 0.5in;">
+                    
+                    <!-- Return Address Area -->
+                    <div id="preview-from" class="whitespace-pre-wrap font-sans text-sm md:text-base text-gray-600 leading-snug max-w-[50%]"></div>
+                    
+                    <!-- Recipient Address Area (Centered Vertically, Shifted Right) -->
+                    <div class="absolute inset-0 flex items-center justify-start">
+                        <div class="ml-[50%] w-[45%] flex flex-col gap-2">
+                            <div id="preview-to" class="whitespace-pre-wrap font-sans text-lg md:text-xl font-medium text-gray-900 leading-snug"></div>
+                            <!-- Barcode Container -->
+                            <img id="barcode-img" src="" alt="USPS Barcode" class="h-4 object-contain object-left hidden" />
+                        </div>
+                    </div>
+
+                    <!-- Stamp Placeholder (Visual only, hidden on print for real stamps usually, but leaving it visible is fine as a guide, let's hide on print) -->
+                    <div class="absolute top-[0.5in] right-[0.5in] w-[1in] h-[1.2in] border-2 border-dashed border-gray-300 rounded flex items-center justify-center text-gray-400 text-xs text-center p-1 print:hidden">
+                        Place Stamp Here
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Elements
+            const selectSize = document.getElementById('env-size');
+            const inputFrom = document.getElementById('from-address');
+            const inputTo = document.getElementById('to-address');
+            const previewFrom = document.getElementById('preview-from');
+            const previewTo = document.getElementById('preview-to');
+            const barcodeImg = document.getElementById('barcode-img');
+            const envelopePhysical = document.getElementById('envelope-physical');
+            const previewWrapper = document.getElementById('preview-wrapper');
+            const btnPrint = document.getElementById('btn-print');
+
+            // Set some default text for the demo if inputs are empty
+            if(!inputFrom.value) inputFrom.value = "Jane Doe\n123 Sender St., Apt 4B\nSeattle, WA 98101";
+            if(!inputTo.value) inputTo.value = "John Smith\n456 Recipient Ave.\nSuite 100\nNew York, NY 10001";
+
+            // Function to update the preview text
+            const updateText = () => {
+                // Escape HTML to prevent injection and keep newlines
+                previewFrom.textContent = inputFrom.value;
+                previewTo.textContent = inputTo.value;
+
+                extractAndUpdateBarcode(inputTo.value);
+            };
+
+            // Function to extract ZIP and update POSTNET barcode
+            const extractAndUpdateBarcode = (address) => {
+                // Match 5 digit or 5-4 digit US zip codes
+                const zipMatch = address.match(/\b\d{5}(?:-\d{4})?\b/);
+                if (zipMatch) {
+                    // Extract just the digits for the barcode API (remove dash if present)
+                    const zipDigits = zipMatch[0].replace('-', '');
+                    barcodeImg.src = `https://bwipjs-api.metafloor.com/?bcid=postnet&text=${zipDigits}`;
+                    barcodeImg.classList.remove('hidden');
+                } else {
+                    barcodeImg.classList.add('hidden');
+                    barcodeImg.src = '';
+                }
+            };
+
+            // Function to update the envelope dimensions and dynamic print CSS
+            const updateDimensions = () => {
+                const selectedOption = selectSize.options[selectSize.selectedIndex];
+                const width = selectedOption.getAttribute('data-width');
+                const height = selectedOption.getAttribute('data-height');
+
+                // 1. Update the physical dimensions of the element
+                envelopePhysical.style.width = width;
+                envelopePhysical.style.height = height;
+
+                // 2. Inject dynamic @page rule to tell the browser printer the exact page size
+                let styleTag = document.getElementById('dynamic-print-style');
+                if (!styleTag) {
+                    styleTag = document.createElement('style');
+                    styleTag.id = 'dynamic-print-style';
+                    document.head.appendChild(styleTag);
+                }
+                styleTag.innerHTML = `
+                    @media print {
+                        @page {
+                            size: ${width} ${height};
+                            margin: 0;
+                        }
+                    }
+                `;
+
+                // 3. Handle screen scaling so it fits within the viewport wrapper
+                scaleToFit();
+            };
+
+            // Function to scale the visual envelope down if it's too big for the screen
+            const scaleToFit = () => {
+                // Remove scale temporarily to get natural bounding client rect
+                envelopePhysical.style.transform = 'scale(1)';
+                
+                // Get physical size in pixels (browser converts in/mm to px automatically for DOM)
+                const envelopeRect = envelopePhysical.getBoundingClientRect();
+                const wrapperRect = previewWrapper.getBoundingClientRect();
+
+                // Calculate scale ratio to fit width or height (with 10% padding buffer)
+                const widthRatio = (wrapperRect.width * 0.9) / envelopeRect.width;
+                const heightRatio = (wrapperRect.height * 0.9) / envelopeRect.height;
+                
+                // Use the smallest ratio to ensure it fits both horizontally and vertically
+                // Max scale of 1 (don't scale up, only down)
+                const scale = Math.min(widthRatio, heightRatio, 1);
+
+                // Apply CSS transform for web viewing
+                envelopePhysical.style.transform = `scale(${scale})`;
+                
+                // Center it by translating it to the middle of the wrapper, 
+                // since transform-origin is top-left, we need to adjust position based on scaled size.
+                // An easier way is setting margin: auto and letting flexbox handle it, but with transform-origin: top left, 
+                // we need to explicitly center it.
+                envelopePhysical.style.transformOrigin = "center center";
+            };
+
+            // Event Listeners
+            inputFrom.addEventListener('input', updateText);
+            inputTo.addEventListener('input', updateText);
+            selectSize.addEventListener('change', updateDimensions);
+            window.addEventListener('resize', scaleToFit);
+            
+            btnPrint.addEventListener('click', () => {
+                window.print();
+            });
+
+            // Initial Setup
+            updateText();
+            updateDimensions();
+            
+            // Brief timeout to ensure DOM layout is complete before calculating scale
+            setTimeout(scaleToFit, 50);
+        });
+    </script>
+</body>
+</html>
